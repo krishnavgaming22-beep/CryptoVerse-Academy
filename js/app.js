@@ -1414,8 +1414,11 @@
   /* ================================================================== */
 
   function getCurrentRouteName() {
-    var route = Router.getCurrentRoute ? Router.getCurrentRoute() : '';
-    return route.replace(/^#\/?/, '').replace(/\/.*$/, '') || '/';
+    var route = Router.getCurrentRoute ? Router.getCurrentRoute() : null;
+    if (!route) return '';
+    var path = route.path || route.hash || '';
+    if (typeof path !== 'string') return '';
+    return path.replace(/^#\/?/, '').replace(/\/.*$/, '') || '/';
   }
 
 })();
