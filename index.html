@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CryptoVerse Academy - Learn cryptocurrency, blockchain, and investing through realistic interactive simulations. No real money required.">
+  <meta name="theme-color" content="#0a0e17">
+  <title>CryptoVerse Academy — Learn Crypto Without Risk</title>
+
+  <!-- Favicon (inline SVG) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%233b82f6'/><stop offset='100%25' style='stop-color:%238b5cf6'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M16 6L10 12h4v10h4V12h4L16 6z' fill='white' transform='rotate(180 16 16)'/></svg>">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+  <!-- Background gradient mesh -->
+  <div class="bg-gradient-mesh"></div>
+
+  <!-- Toast notification container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- App root -->
+  <div id="app"></div>
+
+  <!-- Scripts (order matters) -->
+  <!-- Data Layer -->
+  <script src="js/data/users.js"></script>
+  <script src="js/data/market.js"></script>
+  <script src="js/data/news.js"></script>
+  <script src="js/data/quizzes.js"></script>
+  <script src="js/data/achievements.js"></script>
+  <script src="js/data/learning.js"></script>
+
+  <!-- Utilities -->
+  <script src="js/utils/helpers.js"></script>
+  <script src="js/utils/market-engine.js"></script>
+
+  <!-- Components -->
+  <script src="js/components/ui.js"></script>
+  <script src="js/components/charts.js"></script>
+
+  <!-- Core -->
+  <script src="js/store.js"></script>
+  <script src="js/router.js"></script>
+
+  <!-- Pages -->
+  <script src="js/pages/landing.js"></script>
+  <script src="js/pages/learning.js"></script>
+  <script src="js/pages/trading.js"></script>
+  <script src="js/pages/news.js"></script>
+  <script src="js/pages/scams.js"></script>
+  <script src="js/pages/blockchain-apps.js"></script>
+  <script src="js/pages/academy.js"></script>
+  <script src="js/pages/achievements.js"></script>
+  <script src="js/pages/leaderboard.js"></script>
+  <script src="js/pages/profile.js"></script>
+  <script src="js/pages/final-challenge.js"></script>
+
+  <!-- Main App -->
+  <script src="js/app.js"></script>
+</body>
+</html>

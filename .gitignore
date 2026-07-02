@@ -1,0 +1,9 @@
+.env
+tool-results/
+*.log
+.DS_Store
+node_modules/
+download/
+skills/
+worklog.md
+scripts/
