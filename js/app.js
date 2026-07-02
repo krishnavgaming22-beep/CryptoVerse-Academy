@@ -41,7 +41,7 @@
     document.addEventListener('keydown', handleKeyboard);
 
     // Navbar scroll effect
-    window.addEventListener('scroll', throttle(handleNavScroll, 100), { passive: true });
+    window.addEventListener('scroll', Utils.throttle(handleNavScroll, 100), { passive: true });
 
     // Listen for route changes to start / stop market engine
     document.addEventListener('routeChanged', handleRouteChanged);
