@@ -134,7 +134,7 @@
         break;
 
       case 'expand-milestone':
-        var node = target.closest('.timeline-node');
+        var node = target.closest('.timeline-node, .tl-milestone');
         if (node) node.classList.toggle('active');
         break;
 
@@ -180,6 +180,7 @@
         break;
 
       case 'switch-order-tab':
+      case 'switch-order-side':
         switchOrderTab(target);
         break;
 
@@ -196,6 +197,7 @@
         break;
 
       case 'switch-bottom-tab':
+      case 'switch-tab':
         switchBottomTab(target);
         break;
 
@@ -218,18 +220,40 @@
 
       /* ---------- Scams ---------- */
       case 'switch-scam-tab':
+      case 'scam-tab':
         switchScamTab(target);
         break;
 
       case 'investigate':
+      case 'investigate-rug':
         investigateRedFlag(target);
         break;
 
+      case 'investigate-giveaway':
+        investigateGiveawayRedFlag(target);
+        break;
+
       case 'next-pump-stage':
+      case 'pd-next':
         nextPumpStage(target);
         break;
 
+      case 'pd-prev':
+        // Handled by timeline - go back one stage
+        var pdTimeline = target.closest('.pump-timeline') || target.closest('[data-pump-timeline]');
+        if (pdTimeline) {
+          var pdStages = $$('.pump-stage', pdTimeline);
+          var pdActive = pdStages.findIndex(function (s) { return s.classList.contains('active'); });
+          if (pdActive > 0) {
+            pdStages[pdActive].classList.remove('active');
+            pdStages[pdActive - 1].classList.add('active');
+            pdStages[pdActive - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+        break;
+
       case 'auto-play-pump':
+      case 'pd-autoplay':
         autoPlayPump(target);
         break;
 
@@ -330,7 +354,7 @@
   }
 
   function completeMilestone(target) {
-    var milestoneId = target.dataset.milestoneId || target.closest('[data-milestone-id]')?.dataset.milestoneId;
+    var milestoneId = target.dataset.milestoneId || target.dataset.id || (target.closest('[data-milestone-id]') || target.closest('[data-id]'))?.dataset?.milestoneId || (target.closest('[data-milestone-id]') || target.closest('[data-id]'))?.dataset?.id;
     if (!milestoneId) return;
     Store.updateModuleProgress('history', milestoneId, 'completed');
     Store.addXp(10);
@@ -346,57 +370,111 @@
    * then appends a visual block to the chain.
    */
   function simulateTransaction(target) {
-    var form = target.closest('form') || target.closest('.transaction-form');
+    var form = target.closest('form') || target.closest('.transaction-form') || target.closest('.sim-form');
     if (!form) return;
-    var fromAddr  = ($('input[data-field="from"]', form) || $('input[name="from"]', form))?.value || '0x' + Utils.generateId().slice(0, 40);
-    var toAddr    = ($('input[data-field="to"]', form) || $('input[name="to"]', form))?.value || '0x' + Utils.generateId().slice(0, 40);
-    var amount    = ($('input[data-field="amount"]', form) || $('input[name="amount"]', form))?.value || '0.01';
-    var statusEl  = $('.tx-status', form) || $('.tx-status-text', form);
-    var chainEl   = document.querySelector('.blockchain-visual, .chain-container');
 
-    var steps = ['Signing transaction...', 'Broadcasting to network...', 'Verifying by nodes...', 'Added to block!'];
+    var senderEl = $('#sim-sender', form) || $('select[data-field="from"]', form) || $('select[name="from"]', form);
+    var receiverEl = $('#sim-receiver', form) || $('select[data-field="to"]', form) || $('select[name="to"]', form);
+    var amountEl = $('#sim-amount', form) || $('input[data-field="amount"]', form) || $('input[name="amount"]', form);
+
+    var fromAddr = senderEl ? senderEl.value : 'Alice';
+    var toAddr   = receiverEl ? receiverEl.value : 'Bob';
+    var amount   = amountEl ? amountEl.value : '0.5';
+
+    // Find sim-step elements
+    var stepsGrid = document.querySelector('#sim-steps-grid, .sim-steps-grid');
+    var stepEls   = stepsGrid ? $$('.sim-step', stepsGrid) : [];
+    var chainEl   = document.querySelector('#blockchain-chain, .blockchain-chain, .blockchain-visual, .chain-container');
+    var detailEl  = document.querySelector('#sim-detail, .sim-detail');
+
+    // Reset all steps
+    stepEls.forEach(function (s) {
+      s.classList.remove('sim-active', 'sim-done');
+    });
+    if (detailEl) detailEl.style.display = 'none';
+
     var stepIdx = 0;
 
-    if (statusEl) statusEl.textContent = steps[0];
+    if (stepEls.length > 0) {
+      // Activate first step immediately
+      stepEls[0].classList.add('sim-active');
 
-    var stepInterval = setInterval(function () {
-      stepIdx++;
-      if (stepIdx < steps.length) {
-        if (statusEl) statusEl.textContent = steps[stepIdx];
-      } else {
-        clearInterval(stepInterval);
-        // Append visual block
-        if (chainEl) {
-          var block = document.createElement('div');
-          block.className = 'chain-block animate-fade-in-up';
-          block.innerHTML =
-            '<div class="block-header">Block #' + (chainEl.children.length + 1) + '</div>' +
-            '<div class="block-field"><span>From:</span> ' + Utils.generateId().slice(0, 10) + '...</div>' +
-            '<div class="block-field"><span>To:</span> ' + Utils.generateId().slice(0, 10) + '...</div>' +
-            '<div class="block-field"><span>Amount:</span> ' + amount + ' BTC</div>' +
-            '<div class="block-field"><span>Hash:</span> 0x' + Utils.generateId().slice(0, 16) + '...</div>';
-          chainEl.appendChild(block);
+      var stepInterval = setInterval(function () {
+        stepIdx++;
+        if (stepIdx < stepEls.length) {
+          // Deactivate previous, activate current
+          stepEls[stepIdx - 1].classList.remove('sim-active');
+          stepEls[stepIdx - 1].classList.add('sim-done');
+          stepEls[stepIdx].classList.add('sim-active');
+
+          // Show detail for current step
+          if (detailEl) {
+            var detailContent = detailEl.querySelector('#sim-detail-content') || detailEl;
+            var stepTitles = ['Transaction Created', 'Broadcast to Network', 'Block Formation',
+              'Network Validation', 'Consensus Reached', 'Block Added to Chain', 'Transaction Confirmed'];
+            detailContent.innerHTML = '<p style="margin:0;color:var(--text-primary);font-weight:600;">Step ' + (stepIdx + 1) + ': ' + (stepTitles[stepIdx] || 'Processing...') + '</p>';
+            detailEl.style.display = '';
+          }
+        } else {
+          clearInterval(stepInterval);
+          // Mark all steps as done
+          stepEls[stepIdx - 1].classList.remove('sim-active');
+          stepEls.forEach(function (s) { s.classList.add('sim-done'); });
+
+          // Hide detail, show completion
+          if (detailEl) {
+            var detailContent = detailEl.querySelector('#sim-detail-content') || detailEl;
+            detailContent.innerHTML = '<p style="margin:0;color:#10b981;font-weight:700;">✅ Transaction Complete!</p>';
+            detailEl.style.display = '';
+          }
+
+          // Append visual block to chain
+          if (chainEl) {
+            var blockNum = chainEl.querySelectorAll('.chain-block').length + 1;
+            var block = document.createElement('div');
+            block.className = 'chain-block animate-fade-in-up';
+            block.innerHTML =
+              '<div class="chain-block-label">Block #' + blockNum + '</div>' +
+              '<div class="chain-block-row"><span>From:</span><span>' + Utils.generateId().slice(0, 10) + '...</span></div>' +
+              '<div class="chain-block-row"><span>To:</span><span>' + Utils.generateId().slice(0, 10) + '...</span></div>' +
+              '<div class="chain-block-row"><span>Amount:</span><span>' + amount + ' BTC</span></div>' +
+              '<div class="chain-block-row"><span>Hash:</span><span>0x' + Utils.generateId().slice(0, 16) + '...</span></div>';
+            chainEl.appendChild(block);
+            // Scroll chain to end
+            chainEl.scrollLeft = chainEl.scrollWidth;
+
+            // Update chain stats
+            var statsEl = document.querySelector('#chain-stats');
+            if (statsEl) statsEl.textContent = 'Chain height: ' + blockNum + ' blocks';
+          }
+
+          Store.addXp(5);
+          UI.createToast('Transaction mined successfully! +5 XP ⛏️', 'success');
         }
-        if (statusEl) statusEl.textContent = 'Transaction complete!';
-        UI.createToast('Transaction mined successfully! ⛏️', 'success');
-      }
-    }, 800);
+      }, 800);
+    }
   }
 
   function resetBlockchain(target) {
-    var chainEl = document.querySelector('.blockchain-visual, .chain-container');
+    var chainEl = document.querySelector('#blockchain-chain, .blockchain-chain, .blockchain-visual, .chain-container');
     if (!chainEl) return;
     // Reset to genesis block only
     chainEl.innerHTML =
       '<div class="chain-block genesis-block">' +
-        '<div class="block-header">Genesis Block</div>' +
-        '<div class="block-field"><span>Message:</span> The Times 03/Jan/2009 Chancellor on brink of second bailout</div>' +
+        '<div class="chain-block-label">Genesis Block</div>' +
+        '<div class="chain-block-row"><span>Message:</span><span>The Times 03/Jan/2009 Chancellor on brink of second bailout</span></div>' +
       '</div>';
+    // Reset sim steps
+    $$('.sim-step').forEach(function (s) { s.classList.remove('sim-active', 'sim-done'); });
+    var detailEl = document.querySelector('#sim-detail, .sim-detail');
+    if (detailEl) detailEl.style.display = 'none';
+    var statsEl = document.querySelector('#chain-stats');
+    if (statsEl) statsEl.textContent = 'Chain height: 1 block';
     UI.createToast('Blockchain reset to genesis', 'info');
   }
 
   function markRead(target) {
-    var articleId = target.dataset.articleId || target.closest('[data-article-id]')?.dataset.articleId;
+    var articleId = target.dataset.articleId || target.dataset.id || (target.closest('[data-article-id]') || target.closest('[data-id]'))?.dataset?.articleId || (target.closest('[data-article-id]') || target.closest('[data-id]'))?.dataset?.id;
     if (!articleId) return;
     Store.updateModuleProgress('bitcoin', articleId, 'completed');
     Store.addXp(15);
@@ -410,28 +488,34 @@
    * Shows correct/incorrect feedback, awards XP, records attempt.
    */
   function handleQuizAnswer(target) {
-    var questionEl = target.closest('.quiz-question') || target.closest('[data-question-id]');
+    var questionEl = target.closest('.quiz-question, .quiz-q') || target.closest('[data-question-id]') || target.closest('[data-question]');
     if (!questionEl) return;
     // Prevent double‑answer
     if (questionEl.classList.contains('answered')) return;
     questionEl.classList.add('answered');
 
-    var questionId  = questionEl.dataset.questionId;
+    var questionId  = questionEl.dataset.questionId || questionEl.dataset.question;
     var selectedIdx = parseInt(target.dataset.index, 10);
-    var correctIdx  = parseInt(target.dataset.correct, 10);
-    var isCorrect   = selectedIdx === correctIdx;
+    var correctAttr = target.dataset.correct;
+    var isCorrect   = correctAttr === 'true' || correctAttr === true;
+
+    // If no explicit index, derive from option position
+    if (isNaN(selectedIdx)) {
+      var allOptions = $$('.quiz-option', questionEl);
+      selectedIdx = allOptions.indexOf(target);
+    }
 
     // Visual feedback on all options
     var options = $$('.quiz-option', questionEl);
     options.forEach(function (opt, i) {
       opt.classList.remove('selected', 'correct', 'incorrect');
-      if (i === correctIdx) opt.classList.add('correct');
-      if (i === selectedIdx && !isCorrect) opt.classList.add('incorrect');
-      if (i === selectedIdx) opt.classList.add('selected');
+      if (opt.dataset.correct === 'true') opt.classList.add('correct');
+      if (opt === target && !isCorrect) opt.classList.add('incorrect');
+      if (opt === target) opt.classList.add('selected');
     });
 
     // Show explanation
-    var explanation = $('.quiz-explanation', questionEl);
+    var explanation = $('.quiz-explanation, .quiz-feedback', questionEl);
     if (explanation) explanation.style.display = '';
 
     // Award XP and record
@@ -442,20 +526,20 @@
       UI.createToast('Incorrect — review the material and try again!', 'error');
     }
 
-    Store.recordQuizAttempt(questionId, isCorrect);
+    if (questionId) Store.recordQuizAttempt(questionId, isCorrect);
   }
 
   /* ---------- Trading ---------- */
 
   function selectTradingAsset(target) {
-    var assetId = target.dataset.assetId;
+    var assetId = target.dataset.assetId || target.dataset.id;
     if (!assetId) return;
     Store.set('selectedAsset', assetId);
     refreshTradingView();
   }
 
   function setChartTimeframe(target) {
-    var tf = target.dataset.timeframe;
+    var tf = target.dataset.timeframe || target.dataset.value;
     if (!tf) return;
     Store.set('chartTimeframe', tf);
     $$('.timeframe-btn').forEach(function (b) { b.classList.remove('active'); });
@@ -464,7 +548,7 @@
   }
 
   function toggleChartIndicator(target) {
-    var indicator = target.dataset.indicator;
+    var indicator = target.dataset.indicator || target.dataset.value;
     if (!indicator) return;
     var key = 'indicator_' + indicator;
     var current = Store.get(key);
@@ -477,21 +561,21 @@
     var current = Store.get('chartType') || 'candlestick';
     var next = current === 'candlestick' ? 'line' : 'candlestick';
     Store.set('chartType', next);
-    $$('.chart-type-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.type === next); });
+    $$('.chart-type-btn').forEach(function (b) { b.classList.toggle('active', (b.dataset.type || b.dataset.value) === next); });
     renderTradingChart();
   }
 
   function switchOrderType(target) {
-    var type = target.dataset.orderType;
+    var type = target.dataset.orderType || target.dataset.value;
     if (!type) return;
     Store.set('orderType', type);
-    $$('.order-type-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.orderType === type); });
-    var limitInput = $('.limit-price-input');
+    $$('.order-type-btn').forEach(function (b) { b.classList.toggle('active', (b.dataset.orderType || b.dataset.value) === type); });
+    var limitInput = $('#limit-price-input, .limit-price-input');
     if (limitInput) limitInput.style.display = type === 'limit' ? '' : 'none';
   }
 
   function switchOrderTab(target) {
-    var tab = target.dataset.tab; // 'buy' or 'sell'
+    var tab = target.dataset.tab || target.dataset.value;
     if (!tab) return;
     $$('.order-tab').forEach(function (t) { t.classList.remove('active'); });
     target.classList.add('active');
@@ -501,15 +585,22 @@
       var content = $('[data-order-content="' + tab + '"]', panel);
       if (content) content.style.display = '';
     }
+    // Update submit button text
+    var submitBtn = $('#order-submit-btn');
+    if (submitBtn) submitBtn.textContent = (tab === 'sell' ? 'Sell ' : 'Buy ') + (Store.get('selectedAsset') || 'BTC').toUpperCase();
   }
 
   function setQuickAmount(target) {
-    var pct = parseFloat(target.dataset.percent);
+    var pct = parseFloat(target.dataset.value || target.dataset.percent);
     if (isNaN(pct)) return;
-    var balance = tab === 'sell' ? getAssetHoldingValue() : Store.getBalance('usd');
-    var amountInput = $('input[data-field="amount"]') || $('input[name="amount"]');
+    var activeTab = document.querySelector('.order-tab.active');
+    var side = activeTab ? (activeTab.dataset.value || activeTab.dataset.tab) : 'buy';
+    var balance = side === 'sell' ? getAssetHoldingValue() : Store.getBalance('usd');
+    var amountInput = $('#order-amount-input, input[data-field="amount"]') || $('input[name="amount"]');
     if (amountInput) {
       amountInput.value = ((balance * pct) / 100).toFixed(6);
+      // Trigger input event so any order summary updates
+      amountInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
 
@@ -570,7 +661,7 @@
   }
 
   function toggleWatchlistAction(target) {
-    var assetId = target.dataset.assetId || target.closest('[data-asset-id]')?.dataset.assetId;
+    var assetId = target.dataset.assetId || target.dataset.id || (target.closest('[data-asset-id]') || target.closest('[data-id]'))?.dataset?.assetId || (target.closest('[data-asset-id]') || target.closest('[data-id]'))?.dataset?.id;
     if (!assetId) return;
     Store.toggleWatchlist(assetId);
     target.classList.toggle('watchlisted');
@@ -582,7 +673,7 @@
   }
 
   function switchBottomTab(target) {
-    var tabId = target.dataset.bottomTab;
+    var tabId = target.dataset.bottomTab || target.dataset.tab;
     if (!tabId) return;
     var container = target.closest('.bottom-panel') || target.closest('[data-bottom-panel]');
     if (!container) return;
@@ -594,30 +685,39 @@
   }
 
   function refreshTradingView() {
+    // Guard: if there's no trading chart canvas, we're not on the trading page
+    if (!document.querySelector('#trading-chart, .trading-chart canvas')) return;
     renderTradingChart();
     updateTradingPanel();
     updatePortfolioValues();
   }
 
   function renderTradingChart() {
-    var canvas = document.querySelector('#trading-chart, .trading-chart canvas');
-    if (!canvas) return;
-    var assetId   = Store.get('selectedAsset') || 'btc';
-    var timeframe = Store.get('chartTimeframe') || '1D';
-    var chartType = Store.get('chartType') || 'candlestick';
-    var candles   = MarketEngine.getCandles(assetId, timeframe);
+    try {
+      var canvas = document.querySelector('#trading-chart, .trading-chart canvas');
+      if (!canvas) return;
+      var assetId   = Store.get('selectedAsset') || 'btc';
+      var timeframe = Store.get('chartTimeframe') || '1D';
+      var chartType = Store.get('chartType') || 'candlestick';
+      var candles   = MarketEngine.getCandles(assetId, timeframe);
 
-    Charts.destroy(canvas);
+      if (!candles || candles.length === 0) return;
 
-    if (chartType === 'candlestick') {
-      Charts.renderCandlestick(canvas, candles, {
-        showMA:    Store.get('indicator_ma') || false,
-        showRSI:   Store.get('indicator_rsi') || false,
-        showMACD:  Store.get('indicator_macd') || false
-      });
-    } else {
-      var closes = candles.map(function (c) { return c.close; });
-      Charts.renderLineChart(canvas, closes);
+      Charts.destroy(canvas);
+
+      if (chartType === 'candlestick') {
+        Charts.renderCandlestick(canvas, candles, {
+          showMA:    Store.get('indicator_ma') || false,
+          showRSI:   Store.get('indicator_rsi') || false,
+          showMACD:  Store.get('indicator_macd') || false
+        });
+      } else {
+        var closes = candles.map(function (c) { return c.close; });
+        Charts.renderLineChart(canvas, closes);
+      }
+    } catch (err) {
+      // Silently skip chart rendering errors
+      console.warn('Chart render error:', err);
     }
   }
 
@@ -709,31 +809,56 @@
   function switchScamTab(target) {
     var container = target.closest('.scam-tabs') || target.closest('[data-scam-tabs]');
     if (!container) return;
+    var tabId = target.dataset.tab || target.dataset.panel;
+    if (!tabId) return;
     $$('.scam-tab', container).forEach(function (t) { t.classList.remove('active'); });
     target.classList.add('active');
-    var panelId = target.dataset.panel;
-    $$('.scam-panel', container).forEach(function (p) { p.style.display = 'none'; });
-    var panel = $('#' + panelId, container) || $('[data-panel-id="' + panelId + '"]', container);
-    if (panel) panel.style.display = '';
+    // Panels use IDs like "scam-panel-rugpull"
+    $$('.scam-panel', container).forEach(function (p) { p.classList.remove('active'); p.style.display = 'none'; });
+    var panel = document.querySelector('#scam-panel-' + tabId) ||
+                $('#' + tabId, container) ||
+                $('[data-panel-id="' + tabId + '"]', container);
+    if (panel) { panel.style.display = ''; panel.classList.add('active'); }
   }
 
   function investigateRedFlag(target) {
-    var flagEl = target.closest('.red-flag') || target.closest('[data-flag-id]');
-    if (!flagEl || flagEl.classList.contains('revealed')) return;
-    flagEl.classList.add('revealed');
-    var explanation = flagEl.querySelector('.flag-explanation');
+    var flagEl = target.closest('.rug-cell') || target.closest('[data-flag]');
+    if (!flagEl || flagEl.classList.contains('found')) return;
+    flagEl.classList.add('found');
+    var explanation = flagEl.querySelector('.rug-reveal') || flagEl.querySelector('.flag-explanation');
     if (explanation) explanation.style.display = '';
 
     // Track how many found
-    var container = target.closest('.investigation-container') || target.closest('[data-investigation]');
+    var container = target.closest('.rug-grid') || target.closest('[data-investigation]');
     if (container) {
-      var revealed = $$('.red-flag.revealed', container).length;
-      var total    = $$('.red-flag', container).length;
+      var revealed = $$('.rug-cell.found', container).length;
+      var total    = $$('.rug-cell', container).length;
       var counter  = $('.flags-found-counter', container);
       if (counter) counter.textContent = revealed + '/' + total;
       if (revealed === total) {
         Store.addXp(25);
         UI.createToast('All red flags found! +25 XP 🕵️', 'success');
+      }
+    }
+  }
+
+  function investigateGiveawayRedFlag(target) {
+    var itemEl = target.closest('.giveaway-sus-item');
+    if (!itemEl || itemEl.classList.contains('found')) return;
+    itemEl.classList.add('found');
+    var explanation = itemEl.querySelector('.sus-explain');
+    if (explanation) explanation.style.display = '';
+
+    // Track how many found for this giveaway
+    var container = itemEl.closest('.giveaway-investigation') || itemEl.closest('.scam-panel');
+    if (container) {
+      var revealed = $$('.giveaway-sus-item.found', container).length;
+      var total    = $$('.giveaway-sus-item', container).length;
+      var counter  = $('.flags-found-counter', container);
+      if (counter) counter.textContent = revealed + '/' + total;
+      if (revealed === total) {
+        Store.addXp(25);
+        UI.createToast('All suspicious items found! +25 XP 🕵️', 'success');
       }
     }
   }
@@ -1013,36 +1138,112 @@
         el.classList.remove('animated');
         observer.observe(el);
       });
+
+      // Also observe .scroll-animate elements — add animate-fade-in-up when they enter
+      var scrollEls = $$('.scroll-animate');
+      scrollEls.forEach(function (el) {
+        var scrollObs = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('animate-fade-in-up', 'animated');
+              scrollObs.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        scrollObs.observe(el);
+      });
     } else {
       // Fallback: animate everything immediately
       animEls.forEach(function (el) { el.classList.add('animated'); });
+      $$('.scroll-animate').forEach(function (el) { el.classList.add('animate-fade-in-up', 'animated'); });
     }
 
     // Animate count‑up numbers
     $$('[data-countup]').forEach(function (el) {
-      var target = parseFloat(el.dataset.countup);
+      var raw = el.dataset.countup || el.textContent;
+      // Strip non-numeric chars except decimal point (handles "14,782" and "$10,000")
+      var numStr = raw.replace(/[^0-9.]/g, '');
+      var target = parseFloat(numStr);
       if (isNaN(target)) return;
-      var decimals = parseInt(el.dataset.decimals, 10) || 0;
-      var prefix   = el.dataset.prefix || '';
-      var suffix   = el.dataset.suffix || '';
-      Utils.animateCounter(el, 0, target, 1200, { decimals: decimals, prefix: prefix, suffix: suffix });
+      var decimals = parseInt(el.dataset.decimals, 10);
+      if (isNaN(decimals)) {
+        // Auto-detect: if original had no decimal in number portion, use 0
+        var decimalPart = numStr.split('.')[1];
+        decimals = decimalPart ? decimalPart.length : 0;
+      }
+      var prefix = el.dataset.prefix || '';
+      var suffix = el.dataset.suffix || '';
+      Utils.animateCounter(el, 0, target, 1200, prefix, suffix, decimals);
     });
 
     // Init UI components
-    UI.initAccordions();
-    UI.initTabs();
+    if (UI.initAccordions) UI.initAccordions();
+    if (UI.initTabs) UI.initTabs();
 
-    // Add ripple effect to all buttons
-    $$('.btn, .btn-primary, .btn-secondary, .btn-outline').forEach(function (btn) {
-      UI.addRippleEffect(btn);
+    // Accordion initialization — click .accordion-header to toggle .open
+    $$('.accordion-item').forEach(function (item) {
+      var header = item.querySelector('.accordion-header');
+      if (header && !header.dataset.accordionBound) {
+        header.dataset.accordionBound = '1';
+        header.addEventListener('click', function () {
+          item.classList.toggle('open');
+        });
+      }
     });
+
+    // Tab initialization for [data-tab-group] containers
+    $$('[data-tab-group]').forEach(function (container) {
+      var tabBtns = $$('[data-tab]', container);
+      tabBtns.forEach(function (btn) {
+        if (!btn.dataset.tabBound) {
+          btn.dataset.tabBound = '1';
+          btn.addEventListener('click', function () {
+            var tabId = btn.dataset.tab;
+            tabBtns.forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            $$('[data-tab-content]', container).forEach(function (panel) {
+              panel.style.display = panel.dataset.tabContent === tabId ? '' : 'none';
+            });
+          });
+        }
+      });
+    });
+
+    // Add ripple effect to all buttons via mousedown
+    $$('.btn, .btn-primary, .btn-secondary, .btn-outline, .neon-btn-primary, .neon-btn-outline, .neon-trade-btn, .neon-sidebar-btn').forEach(function (btn) {
+      if (btn.dataset.rippleBound) return;
+      btn.dataset.rippleBound = '1';
+      btn.addEventListener('mousedown', function (e) {
+        var rect = btn.getBoundingClientRect();
+        var ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        var size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+        ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+        btn.style.position = btn.style.position || 'relative';
+        btn.style.overflow = 'hidden';
+        btn.appendChild(ripple);
+        setTimeout(function () { ripple.remove(); }, 600);
+      });
+    });
+
+    // Also call UI.addRippleEffect if available
+    if (UI.addRippleEffect) {
+      $$('.btn, .btn-primary, .btn-secondary, .btn-outline').forEach(function (btn) {
+        UI.addRippleEffect(btn);
+      });
+    }
   }
 
   function initPageEvents() {
+    // Global input event delegation
+    app().addEventListener('input', handleGlobalInput);
+
     // Search input handling for news page
     var searchInput = $('input[data-action="search-news"]');
     if (searchInput) {
-      searchInput.addEventListener('input', debounce(function () {
+      searchInput.addEventListener('input', Utils.debounce(function () {
         var query = searchInput.value.toLowerCase().trim();
         $$('.news-card').forEach(function (card) {
           var title = (card.dataset.title || card.textContent).toLowerCase();
@@ -1064,25 +1265,69 @@
     }
   }
 
+  function handleGlobalInput(e) {
+    var target = e.target;
+
+    // Trading amount/price inputs — update order summary in real-time
+    if (target.id === 'order-amount-input' || target.id === 'limit-price-input' ||
+        (target.dataset && (target.dataset.field === 'amount' || target.dataset.field === 'limit-price' || target.dataset.field === 'price'))) {
+      updateOrderSummary();
+    }
+
+    // News search input — filter news cards
+    if (target.dataset && target.dataset.action === 'search-news') {
+      var query = target.value.toLowerCase().trim();
+      $$('.news-card').forEach(function (card) {
+        var title = (card.dataset.title || card.textContent).toLowerCase();
+        card.style.display = title.includes(query) ? '' : 'none';
+      });
+    }
+  }
+
+  function updateOrderSummary() {
+    var amountInput = $('#order-amount-input') || $('input[data-field="amount"]') || $('input[name="amount"]');
+    var limitInput = $('#limit-price-input') || $('input[data-field="limit-price"]') || $('input[name="limit-price"]');
+    var summaryEl = $('[data-display="order-total"], .order-summary, .order-total');
+    if (!summaryEl || !amountInput) return;
+
+    var assetId = Store.get('selectedAsset') || 'btc';
+    var amount = parseFloat(amountInput.value) || 0;
+    var price = (limitInput && parseFloat(limitInput.value)) || MarketEngine.getPrice(assetId);
+    var total = amount * price;
+
+    if (summaryEl) summaryEl.textContent = Utils.formatCurrency(total);
+  }
+
   /* ================================================================== */
   /*  6. Market Engine Integration                                       */
   /* ================================================================== */
 
   function handleRouteChanged(e) {
-    var route = e.detail?.route || getCurrentRouteName();
+    var route = (e.detail && e.detail.route) || getCurrentRouteName();
+    var routeStr = typeof route === 'string' ? route : '';
 
     // Stop all intervals when leaving any page
     stopMarketInterval();
     stopTickerInterval();
     stopPumpInterval();
 
+    // Destroy any existing trading charts
+    var chartCanvas = document.querySelector('#trading-chart, .trading-chart canvas');
+    if (chartCanvas) Charts.destroy(chartCanvas);
+
     // Start market engine when entering trading page
-    if (route === 'trading' || route === '/trading') {
+    if (routeStr.indexOf('trading') !== -1) {
       startMarketInterval();
+      // Initialise chart on first visit or re-render after route change
+      setTimeout(function () {
+        renderTradingChart();
+        updateTradingPanel();
+        updatePortfolioValues();
+      }, 50);
     }
 
     // Start ticker when on landing page
-    if (route === 'landing' || route === '/' || route === '/landing') {
+    if (routeStr === '' || routeStr === '/' || routeStr === 'landing' || routeStr === '/landing') {
       startTickerInterval();
     }
 
@@ -1144,15 +1389,30 @@
   }
 
   function updateTickerPrices() {
-    var assets = MarketEngine.getAssetIds ? MarketEngine.getAssetIds() : (DataMarket || []).map(function (a) { return a.id; });
-    assets.forEach(function (id) {
+    var assetIds = MarketEngine.getAssetIds ? MarketEngine.getAssetIds() : (DataMarket || []).map(function (a) { return a.id; });
+    assetIds.forEach(function (id) {
+      // Support both data-attribute based and class-based ticker items
       var priceEl  = $('[data-ticker-price="' + id + '"]');
       var changeEl = $('[data-ticker-change="' + id + '"]');
+
+      // If no data-attribute elements found, look for neon-ticker items by symbol
+      if (!priceEl) {
+        var tickerItems = $$('.neon-ticker-item');
+        tickerItems.forEach(function (item) {
+          var symEl = item.querySelector('.neon-ticker-symbol');
+          if (symEl && symEl.textContent.trim().toUpperCase() === id.toUpperCase()) {
+            if (!priceEl) priceEl = item.querySelector('.neon-ticker-price');
+            if (!changeEl) changeEl = item.querySelector('.neon-ticker-change');
+          }
+        });
+      }
+
       if (priceEl) priceEl.textContent = Utils.formatCurrency(MarketEngine.getPrice(id));
       if (changeEl) {
-        var change = MarketEngine.get24hChange(id);
+        var change = MarketEngine.get24hChange ? MarketEngine.get24hChange(id) : 0;
         changeEl.textContent = Utils.formatPercent(change);
-        changeEl.className = (change >= 0 ? 'ticker-change positive' : 'ticker-change negative');
+        changeEl.className = changeEl.className.replace(/neon-ticker-(up|down)/g, '').trim();
+        changeEl.classList.add(change >= 0 ? 'neon-ticker-up' : 'neon-ticker-down');
       }
     });
   }
@@ -1186,7 +1446,7 @@
   }
 
   function handleNavScroll() {
-    var navbar = document.querySelector('.navbar, .main-navbar');
+    var navbar = document.querySelector('.navbar, .main-navbar, .neon-nav');
     if (!navbar) return;
     if (window.scrollY > 20) {
       navbar.classList.add('scrolled');
