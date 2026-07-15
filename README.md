@@ -1,4 +1,5 @@
-# CryptoVerse Academy
+# CryptoVerse 
+
 
 A professional cryptocurrency education and paper trading platform designed for teenagers aged 13–18. Learn blockchain, investing, market analysis, and crypto safety through realistic interactive simulations — with zero real money at risk.
 
